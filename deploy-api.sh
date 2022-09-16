@@ -16,17 +16,22 @@ zero_downtime_deploy() {
 
   # wait for new container to be available  
   new_container_id=$(docker ps -f name=$service_name -q | head -n1)
-  new_container_helth_check=$(docker inspect -f '{{ .State.Health.Status }}' $new_container_id)
  
+  while :
+    do
+        new_container_helth_check=$(docker inspect -f '{{ .State.Health.Status }}' $new_container_id)
   
-  while [ ["${new_container_helth_check}" != "healthy"] ]
-  do
-    echo "waiting for container ${new_container_id} to be healthy"
-    
-    sleep 5
-    new_container_helth_check=$(docker inspect -f '{{ .State.Health.Status }}' $new_container_id)
-  done
+        if [[ "$new_container_helth_check" == "healthy" ]]; then
+            echo "container is healthy now"
+            break
+        fi
+
+        echo "waiting..."
+        sleep 5
+    done
   # start routing requests to the new container (as well as the old)  
+  sleep 5
+
   reload_nginx
 
   # take the old container offline  
@@ -34,7 +39,6 @@ zero_downtime_deploy() {
   docker rm $old_container_id
   # 
   docker-compose up -d --no-deps --scale $service_name=1 --no-recreate $service_name
-
   # stop routing requests to the old container  
   reload_nginx  
 }
